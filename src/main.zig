@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = std.math;
 
 fn check_if_slice_is_palindrome(slice: []u8) bool {
     for (0..(slice.len + 1) / 2) |i| {
@@ -45,10 +46,46 @@ fn mirror(num: u64, expected_length: u32) error{ NoSpaceLeft, InvalidCharacter, 
     return try std.fmt.parseUnsigned(u64, mirrored_buf[0..expected_length], 10);
 }
 
-fn find_palindrome(current_digits: u64, decimal_length: u32, recursion_depth: u32) error{ NoSpaceLeft, InvalidCharacter, Overflow }!void {
+fn mirror_binary(num: u64, expected_length: u6) u64 {
+    return num | @bitReverse(num) >> (64 - expected_length);
+}
+
+fn mirror_binary_max(num: u64, expected_length: u8) u64 {
+    return num & (math.maxInt(u64) | @bitReverse(num) >> (64 - expected_length));
+}
+
+fn is_pruned(current_digits: u64, decimal_length: u32, recursion_depth: u6) error{ NoSpaceLeft, InvalidCharacter, Overflow }!bool {
+    const changing_decimal_length = (decimal_length + 1 - 2 * recursion_depth) / 2;
+    const exp = math.pow(u64, 10, changing_decimal_length);
+    const min_decimal_palindrome_pre_mirror = current_digits * exp;
+    const max_decimal_palindrome_pre_mirror = current_digits * exp + exp - 1;
+    const min_decimal_palindrome = try mirror(min_decimal_palindrome_pre_mirror, decimal_length);
+    const max_decimal_palindrome = try mirror(max_decimal_palindrome_pre_mirror, decimal_length);
+    const bit_length = 64 - @clz(min_decimal_palindrome);
+    if ((64 - @clz(max_decimal_palindrome)) != bit_length) {
+        return false;
+    }
+
+    const one: u32 = 1;
+    const binary_digits = min_decimal_palindrome % (one << recursion_depth);
+    const min_binary_palindrome = mirror_binary(binary_digits, bit_length);
+    const max_binary_palindrome = mirror_binary_max(binary_digits, bit_length);
+
+    std.debug.print("min_decimal_palindrome {d}\n", .{min_decimal_palindrome});
+    std.debug.print("max_decimal_palindrome {d}\n", .{max_decimal_palindrome});
+    std.debug.print("min_binary_palindrome {b}\n", .{min_binary_palindrome});
+    std.debug.print("max_binary_palindrome {b}\n", .{max_binary_palindrome});
+    return (min_binary_palindrome > max_decimal_palindrome) or (max_binary_palindrome < min_decimal_palindrome);
+}
+
+fn find_palindrome(current_digits: u64, decimal_length: u32, recursion_depth: u5) error{ NoSpaceLeft, InvalidCharacter, Overflow }!void {
     // std.debug.print("find_palindrome {d} - {d} - {d}\n", .{ current_digits, decimal_length, recursion_depth });
     if (recursion_depth * 2 >= decimal_length) {
         try check_and_print(try mirror(current_digits, decimal_length));
+        return;
+    }
+
+    if ((current_digits > 0) and try is_pruned(current_digits, decimal_length, recursion_depth)) {
         return;
     }
 

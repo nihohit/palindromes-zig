@@ -29,7 +29,10 @@ fn check_if_binary_palindrome(num: u256) error{NoSpaceLeft}!bool {
 
 fn check_and_print(num: u256) error{NoSpaceLeft}!void {
     if (try check_if_binary_palindrome(num)) {
-        std.debug.print("Found {d}\n", .{num});
+        const timestamp = std.time.timestamp();
+        const time = fromTimestamp(timestamp);
+
+        std.debug.print("Found {d} at {}\n", .{ num, time });
     }
 }
 
@@ -118,4 +121,82 @@ test "simple test should pass" {
     try std.testing.expect(try check_if_palindrome(0));
     try std.testing.expect(try check_if_palindrome(3148955775598413));
     try std.testing.expect(!try check_if_palindrome(3148955775598414));
+}
+
+pub fn toRFC3339(dt: DateTime) [20]u8 {
+    var buf: [20]u8 = undefined;
+    _ = std.fmt.formatIntBuf(buf[0..4], dt.year, 10, .lower, .{ .width = 4, .fill = '0' });
+    buf[4] = '-';
+    paddingTwoDigits(buf[5..7], dt.month);
+    buf[7] = '-';
+    paddingTwoDigits(buf[8..10], dt.day);
+    buf[10] = 'T';
+
+    paddingTwoDigits(buf[11..13], dt.hour);
+    buf[13] = ':';
+    paddingTwoDigits(buf[14..16], dt.minute);
+    buf[16] = ':';
+    paddingTwoDigits(buf[17..19], dt.second);
+    buf[19] = 'Z';
+
+    return buf;
+}
+
+fn paddingTwoDigits(buf: *[2]u8, value: u8) void {
+    switch (value) {
+        0 => buf.* = "00".*,
+        1 => buf.* = "01".*,
+        2 => buf.* = "02".*,
+        3 => buf.* = "03".*,
+        4 => buf.* = "04".*,
+        5 => buf.* = "05".*,
+        6 => buf.* = "06".*,
+        7 => buf.* = "07".*,
+        8 => buf.* = "08".*,
+        9 => buf.* = "09".*,
+        // todo: optionally can do all the way to 59 if you want
+        else => _ = std.fmt.formatIntBuf(buf, value, 10, .lower, .{}),
+    }
+}
+
+pub const DateTime = struct {
+    year: i64,
+    month: i64,
+    day: i64,
+    hour: i64,
+    minute: i64,
+    second: i64,
+};
+
+pub fn fromTimestamp(ts: i64) DateTime {
+    const SECONDS_PER_DAY = 86400;
+    const DAYS_PER_YEAR = 365;
+    const DAYS_IN_4YEARS = 1461;
+    const DAYS_IN_100YEARS = 36524;
+    const DAYS_IN_400YEARS = 146097;
+    const DAYS_BEFORE_EPOCH = 719468;
+
+    const seconds_since_midnight: i64 = @rem(ts, SECONDS_PER_DAY);
+    var day_n: i64 = DAYS_BEFORE_EPOCH + @divTrunc(ts, SECONDS_PER_DAY);
+    var temp: i64 = 0;
+
+    temp = 4 * @divTrunc(day_n + DAYS_IN_100YEARS + 1, DAYS_IN_400YEARS) - 1;
+    const this = (100 * temp);
+    var year = this;
+    day_n -= DAYS_IN_100YEARS * temp + @divTrunc(temp, 4);
+
+    temp = 4 * @divTrunc((day_n + DAYS_PER_YEAR + 1), DAYS_IN_4YEARS) - 1;
+    year += temp;
+    day_n -= DAYS_PER_YEAR * temp + @divTrunc(temp, 4);
+
+    var month = @divTrunc((5 * day_n + 2), 153);
+    const day = day_n - @divTrunc((@as(i64, month) * 153 + 2), 5) + 1;
+
+    month += 3;
+    if (month > 12) {
+        month -= 12;
+        year += 1;
+    }
+
+    return DateTime{ .year = year, .month = month, .day = day, .hour = @divTrunc(seconds_since_midnight, 3600), .minute = @divTrunc(@mod(seconds_since_midnight, 3600), 60), .second = @mod(seconds_since_midnight, 60) };
 }

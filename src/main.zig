@@ -27,13 +27,15 @@ fn check_if_binary_palindrome(num: u256) error{NoSpaceLeft}!bool {
     return check_if_slice_is_palindrome(binary_slice);
 }
 
-fn check_and_print(num: u256) error{NoSpaceLeft}!void {
+fn check_and_print(num: u256, prev_timestamp: i64) error{NoSpaceLeft}!bool {
     if (try check_if_binary_palindrome(num)) {
-        const timestamp = std.time.timestamp();
-        const time = fromTimestamp(timestamp);
+        const timestamp = std.time.milliTimestamp();
+        const time = fromTimestamp(timestamp - prev_timestamp);
 
         std.debug.print("Found {d} at {}\n", .{ num, time });
+        return true;
     }
+    return false;
 }
 
 fn check_if_palindrome(num: u256) error{NoSpaceLeft}!bool {
@@ -84,15 +86,15 @@ fn is_pruned(current_digits: u256, decimal_length: u32, recursion_depth: u8) err
     return (min_binary_palindrome > max_decimal_palindrome) or (max_binary_palindrome < min_decimal_palindrome);
 }
 
-fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u8) error{ NoSpaceLeft, InvalidCharacter, Overflow }!void {
+fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u8, prev_timestamp: i64) error{ NoSpaceLeft, InvalidCharacter, Overflow }!bool {
+    var new_timestamp = prev_timestamp;
     // std.debug.print("find_palindrome {d} - {d} - {d}\n", .{ current_digits, decimal_length, recursion_depth });
     if (recursion_depth * 2 >= decimal_length) {
-        try check_and_print(try mirror(current_digits, decimal_length));
-        return;
+        return try check_and_print(try mirror(current_digits, decimal_length), prev_timestamp);
     }
 
     if ((current_digits > 0) and try is_pruned(current_digits, decimal_length, recursion_depth)) {
-        return;
+        return false;
     }
 
     var digit: u256 = 0;
@@ -102,16 +104,22 @@ fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u
             continue;
         }
         const new_digits = current_digits * 10 + digit;
-        try find_palindrome(new_digits, decimal_length, recursion_depth + 1);
+        if (try find_palindrome(new_digits, decimal_length, recursion_depth + 1, new_timestamp)) {
+            new_timestamp = std.time.milliTimestamp();
+        }
         digit += 1;
     }
+    return false;
 }
 
 pub fn main() !void {
     var i: u32 = 1;
+    var timestamp = std.time.milliTimestamp();
     while (true) {
         // std.debug.print("start {d}\n", .{i});
-        try find_palindrome(0, i, 0);
+        if (try find_palindrome(0, i, 0, timestamp)) {
+            timestamp = std.time.milliTimestamp();
+        }
         i += 1;
     }
 }
@@ -121,25 +129,6 @@ test "simple test should pass" {
     try std.testing.expect(try check_if_palindrome(0));
     try std.testing.expect(try check_if_palindrome(3148955775598413));
     try std.testing.expect(!try check_if_palindrome(3148955775598414));
-}
-
-pub fn toRFC3339(dt: DateTime) [20]u8 {
-    var buf: [20]u8 = undefined;
-    _ = std.fmt.formatIntBuf(buf[0..4], dt.year, 10, .lower, .{ .width = 4, .fill = '0' });
-    buf[4] = '-';
-    paddingTwoDigits(buf[5..7], dt.month);
-    buf[7] = '-';
-    paddingTwoDigits(buf[8..10], dt.day);
-    buf[10] = 'T';
-
-    paddingTwoDigits(buf[11..13], dt.hour);
-    buf[13] = ':';
-    paddingTwoDigits(buf[14..16], dt.minute);
-    buf[16] = ':';
-    paddingTwoDigits(buf[17..19], dt.second);
-    buf[19] = 'Z';
-
-    return buf;
 }
 
 fn paddingTwoDigits(buf: *[2]u8, value: u8) void {
@@ -159,44 +148,29 @@ fn paddingTwoDigits(buf: *[2]u8, value: u8) void {
     }
 }
 
-pub const DateTime = struct {
-    year: i64,
-    month: i64,
+pub const Time = struct {
     day: i64,
     hour: i64,
     minute: i64,
     second: i64,
+    milli: i64,
 };
 
-pub fn fromTimestamp(ts: i64) DateTime {
-    const SECONDS_PER_DAY = 86400;
-    const DAYS_PER_YEAR = 365;
-    const DAYS_IN_4YEARS = 1461;
-    const DAYS_IN_100YEARS = 36524;
-    const DAYS_IN_400YEARS = 146097;
-    const DAYS_BEFORE_EPOCH = 719468;
+pub fn fromTimestamp(ts: i64) Time {
+    const MILLISECONDS_PER_DAY = 86_400_000;
+    const MILLISECONDS_PER_HOUR = 3_600_000;
+    const MILLISECONDS_PER_MINUTE = 60_000;
+    const MILLISECONDS_PER_SECOND = 1_000;
 
-    const seconds_since_midnight: i64 = @rem(ts, SECONDS_PER_DAY);
-    var day_n: i64 = DAYS_BEFORE_EPOCH + @divTrunc(ts, SECONDS_PER_DAY);
-    var temp: i64 = 0;
+    const day: i64 = @divTrunc(ts, MILLISECONDS_PER_DAY);
+    var new_ts = ts - day * MILLISECONDS_PER_DAY;
+    const hour = @divTrunc(new_ts, MILLISECONDS_PER_HOUR);
+    new_ts = ts - hour * MILLISECONDS_PER_HOUR;
+    const minute = @divTrunc(new_ts, MILLISECONDS_PER_MINUTE);
+    new_ts = ts - minute * MILLISECONDS_PER_MINUTE;
+    const second = @divTrunc(new_ts, MILLISECONDS_PER_SECOND);
+    new_ts = ts - second * MILLISECONDS_PER_SECOND;
+    const milli = new_ts;
 
-    temp = 4 * @divTrunc(day_n + DAYS_IN_100YEARS + 1, DAYS_IN_400YEARS) - 1;
-    const this = (100 * temp);
-    var year = this;
-    day_n -= DAYS_IN_100YEARS * temp + @divTrunc(temp, 4);
-
-    temp = 4 * @divTrunc((day_n + DAYS_PER_YEAR + 1), DAYS_IN_4YEARS) - 1;
-    year += temp;
-    day_n -= DAYS_PER_YEAR * temp + @divTrunc(temp, 4);
-
-    var month = @divTrunc((5 * day_n + 2), 153);
-    const day = day_n - @divTrunc((@as(i64, month) * 153 + 2), 5) + 1;
-
-    month += 3;
-    if (month > 12) {
-        month -= 12;
-        year += 1;
-    }
-
-    return DateTime{ .year = year, .month = month, .day = day, .hour = @divTrunc(seconds_since_midnight, 3600), .minute = @divTrunc(@mod(seconds_since_midnight, 3600), 60), .second = @mod(seconds_since_midnight, 60) };
+    return Time{ .day = day, .hour = hour, .minute = minute, .second = second, .milli = milli };
 }

@@ -27,10 +27,12 @@ fn check_if_binary_palindrome(num: u256) error{NoSpaceLeft}!bool {
     return check_if_slice_is_palindrome(binary_slice);
 }
 
-fn check_and_print(num: u256, prev_timestamp: i64) error{NoSpaceLeft}!bool {
+var prev_timestamp: i64 = 0;
+
+fn check_and_print(num: u256) error{NoSpaceLeft}!void {
     if (try check_if_binary_palindrome(num)) {
         const timestamp = std.time.milliTimestamp();
-        const time = fromTimestamp(timestamp - prev_timestamp);
+        const time = fromTimestamp(timestamp - @atomicRmw(i64, &prev_timestamp, .Xchg, std.time.milliTimestamp(), .SeqCst));
 
         std.debug.print("Found {d} at {}\n", .{ num, time });
         return true;
@@ -86,9 +88,7 @@ fn is_pruned(current_digits: u256, decimal_length: u32, recursion_depth: u8) err
     return (min_binary_palindrome > max_decimal_palindrome) or (max_binary_palindrome < min_decimal_palindrome);
 }
 
-fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u8, prev_timestamp: i64) error{ NoSpaceLeft, InvalidCharacter, Overflow }!bool {
-    var new_timestamp = prev_timestamp;
-    // std.debug.print("find_palindrome {d} - {d} - {d}\n", .{ current_digits, decimal_length, recursion_depth });
+fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u8) error{ NoSpaceLeft, InvalidCharacter, Overflow }!void {
     if (recursion_depth * 2 >= decimal_length) {
         return try check_and_print(try mirror(current_digits, decimal_length), prev_timestamp);
     }
@@ -113,13 +113,11 @@ fn find_palindrome(current_digits: u256, decimal_length: u32, recursion_depth: u
 }
 
 pub fn main() !void {
+    prev_timestamp = std.time.milliTimestamp();
     var i: u32 = 1;
     var timestamp = std.time.milliTimestamp();
     while (true) {
-        // std.debug.print("start {d}\n", .{i});
-        if (try find_palindrome(0, i, 0, timestamp)) {
-            timestamp = std.time.milliTimestamp();
-        }
+        try find_palindrome(0, i, 0);
         i += 1;
     }
 }

@@ -21,15 +21,15 @@ fn get_mirrors(num: u256) error{ NoSpaceLeft, InvalidCharacter, Overflow }![2]u2
     return [2]u256{ first_num, second_num };
 }
 
-fn check_if_binary_palindrome(num: u256) error{NoSpaceLeft}!bool {
-    var binary_buf = [_]u8{0} ** 260;
+fn check_if_binary_palindrome(num: anytype) error{NoSpaceLeft}!bool {
+    var binary_buf = [_]u8{0} ** (@bitSizeOf(@TypeOf(num)) + 1);
     var binary_slice = try std.fmt.bufPrint(&binary_buf, "{b}", .{num});
     return check_if_slice_is_palindrome(binary_slice);
 }
 
 var prev_timestamp: i64 = 0;
 
-fn check_and_print(num: u256) error{NoSpaceLeft}!void {
+fn check_and_print(num: anytype) error{NoSpaceLeft}!void {
     if (try check_if_binary_palindrome(num)) {
         const timestamp = std.time.milliTimestamp();
         const time = fromTimestamp(timestamp - @atomicRmw(i64, &prev_timestamp, .Xchg, std.time.milliTimestamp(), .SeqCst));
@@ -48,17 +48,17 @@ fn mirror(num: anytype, expected_length: u32) error{ NoSpaceLeft, InvalidCharact
     const log = math.log2(10.0);
     const max_number_of_digits = comptime math.ceil(@as(comptime_float, @bitSizeOf(@TypeOf(num))) / log);
     std.debug.assert(expected_length < max_number_of_digits);
-    var mirrored_buf = [_]u8{0} ** max_number_of_digits;
+    var mirrored_buf = [_]u8{0} ** (max_number_of_digits + 1);
     const slice = try std.fmt.bufPrint(&mirrored_buf, "{d}", .{num});
     for (slice, 0..slice.len) |s, i| mirrored_buf[expected_length - i - 1] = s;
-    return try std.fmt.parseUnsigned(u256, mirrored_buf[0..expected_length], 10);
+    return try std.fmt.parseUnsigned(@TypeOf(num), mirrored_buf[0..expected_length], 10);
 }
 
-fn mirror_binary(num: anytype, expected_length: u9) @TypeOf(num) {
+fn mirror_binary(num: anytype, expected_length: anytype) @TypeOf(num) {
     return num | @bitReverse(num) >> @truncate(u8, (@bitSizeOf(@TypeOf(num)) - expected_length));
 }
 
-fn mirror_binary_max(num: anytype, expected_length: u9, recursion_depth: u8) @TypeOf(num) {
+fn mirror_binary_max(num: anytype, expected_length: anytype, recursion_depth: u8) @TypeOf(num) {
     const reverse = @bitReverse(num);
     const truncated_recursion_depth = @truncate(u8, recursion_depth);
     const max_int: @TypeOf(num) = math.maxInt(@TypeOf(num));

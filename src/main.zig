@@ -23,7 +23,7 @@ fn get_mirrors(num: u256) error{ NoSpaceLeft, InvalidCharacter, Overflow }![2]u2
 
 fn check_if_binary_palindrome(num: anytype) error{NoSpaceLeft}!bool {
     var binary_buf = [_]u8{0} ** (@bitSizeOf(@TypeOf(num)) + 1);
-    var binary_slice = try std.fmt.bufPrint(&binary_buf, "{b}", .{num});
+    const binary_slice = try std.fmt.bufPrint(&binary_buf, "{b}", .{num});
     return check_if_slice_is_palindrome(binary_slice);
 }
 
@@ -40,7 +40,7 @@ fn check_and_print(num: anytype) error{NoSpaceLeft}!void {
 
 fn check_if_palindrome(num: u256) error{NoSpaceLeft}!bool {
     var buf = [_]u8{0} ** 30;
-    var slice = try std.fmt.bufPrint(&buf, "{d}", .{num});
+    const slice = try std.fmt.bufPrint(&buf, "{d}", .{num});
     return check_if_slice_is_palindrome(slice) and try check_if_binary_palindrome(num);
 }
 
@@ -55,15 +55,15 @@ fn mirror(num: anytype, expected_length: u32) error{ NoSpaceLeft, InvalidCharact
 }
 
 fn mirror_binary(num: anytype, expected_length: anytype) @TypeOf(num) {
-    return num | @bitReverse(num) >> @truncate(u8, (@bitSizeOf(@TypeOf(num)) - expected_length));
+    return num | @bitReverse(num) >> @truncate(@bitSizeOf(@TypeOf(num)) - expected_length);
 }
 
 fn mirror_binary_max(num: anytype, expected_length: anytype, recursion_depth: u8) @TypeOf(num) {
     const reverse = @bitReverse(num);
-    const truncated_recursion_depth = @truncate(u8, recursion_depth);
+    const truncated_recursion_depth: u8 = @truncate(recursion_depth);
     const max_int: @TypeOf(num) = math.maxInt(@TypeOf(num));
     const only_ones = max_int >> truncated_recursion_depth;
-    const reverse_and_ones = (only_ones | reverse) >> @truncate(u8, @bitSizeOf(@TypeOf(num)) - expected_length);
+    const reverse_and_ones = (only_ones | reverse) >> @truncate(@bitSizeOf(@TypeOf(num)) - expected_length);
     const reverse_and_ones_with_space_for_num = (reverse_and_ones >> truncated_recursion_depth) << truncated_recursion_depth;
     return num | reverse_and_ones_with_space_for_num;
 }
@@ -82,7 +82,7 @@ fn is_pruned(current_digits: anytype, decimal_length: u32, recursion_depth: u8) 
     }
 
     const one: u32 = 1;
-    const binary_digits = min_decimal_palindrome % (one << @truncate(u5, recursion_depth));
+    const binary_digits = min_decimal_palindrome % (one << @as(u5, @truncate(recursion_depth)));
     const min_binary_palindrome = mirror_binary(binary_digits, bit_length);
     const max_binary_palindrome = mirror_binary_max(binary_digits, bit_length, recursion_depth);
 
@@ -115,7 +115,7 @@ fn find_palindrome(current_digits: anytype, decimal_length: u32, recursion_depth
 pub fn main() !void {
     prev_timestamp = std.time.milliTimestamp();
     var i: u32 = 1;
-    var start: u256 = 0;
+    const start: u256 = 0;
     while (true) {
         try find_palindrome(start, i, 0);
         i += 1;
